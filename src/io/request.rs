@@ -1,8 +1,10 @@
 use std::collections::HashMap;
-use std::time;
+use std::mem;
 use std::time::Duration;
 use url::Url;
-use crate::io::request::Method::Uninitialized;
+use crate::io::error::Error;
+use crate::io::request::HttpVersion::{All, Http1Only, Http2Only};
+use crate::io::request::Method::{Uninitialized, DELETE, GET, POST, PUT};
 
 #[derive(Clone, Debug)]
 pub(crate) enum Method {
@@ -13,18 +15,34 @@ pub(crate) enum Method {
     Uninitialized,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) enum Error {
-    Builder,
-    Timeout,
-
-}
 
 #[derive(Clone, Debug)]
 pub(crate) enum HttpVersion {
     Http1Only,
     Http2Only,
     All,
+}
+
+impl From<&str> for HttpVersion{
+    fn from(version: &str) -> Self {
+        match version {
+            "Http1" => Http1Only,
+            "Http2" => Http2Only,
+            _ => All,
+        }
+    }
+}
+
+impl From<&str> for Method {
+    fn from(method:&str) -> Self {
+        match method {
+            "Get" => GET,
+            "Post" => POST,
+            "Put" => PUT,
+            "Delete" => DELETE,
+            _ => Uninitialized,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -37,9 +55,6 @@ struct Request {
     version: HttpVersion
 }
 
-struct RequestBuilder {
-    request: Result<Request, Error>,
-}
 
 impl Request {
     fn new() -> Self {
@@ -95,23 +110,31 @@ impl Request {
     }
 }
 
+struct RequestBuilder {
+    request: Request,
+}
+
+
 impl RequestBuilder {
-    // url: Url,
-    // headers: HashMap<String, String>,
-    // body: Option<String>,
-    // timeout: Duration,
-    // version: HttpVersion
     fn new() -> Self {
         RequestBuilder {
-            request: Ok(Request::new()),
+            request: Request::new(),
         }
     }
 
-    fn url<T: Into<String> + Into<&str>>(&mut self, url: T) -> &mut Self {
-
+    fn url<T: AsRef<str>>(&mut self, url: T) -> Result<&mut Self, Error> {
+        let req = &mut self.request;
+        req.url = Url::parse(url.as_ref())?;
+        Ok(self)
     }
 
-    fn headers<K: Into<String>, V: Into<String>>(&mut self, headers: HashMap<K, V>) -> &mut Self {
+    fn body<T: Into<String>>(&mut self, body: T) -> Result<&mut Self, Error> {
+        let req = &mut self.request;
+        req.body = Some(body.into());
+        Ok(self)
+    }
+
+    fn headers<K: Into<String>, V: Into<String>>(&mut self, headers: HashMap<K, V>) -> Result<&mut Self, Error> {
         // match &self.request {
         //     Err(err) => {
         //         self.request = Err(err.clone());
@@ -122,12 +145,39 @@ impl RequestBuilder {
         //         &mut self
         //     }
         // }
-        if let Ok(req) = &mut self.request {
-            req.headers = headers;
-        } else {
-
+        let req = &mut self.request;
+        for (k, v) in headers.iter() {
+            req.headers.insert(k.into(), v.into());
         }
-        self
+        Ok(self)
+    }
+
+    fn method<T: AsRef<str> + Into<String>>(&mut self, method:T) -> Result<&mut Self, Error> {
+        let req = &mut self.request;
+        req.method = method.into().into();
+        Ok(self)
+    }
+
+    fn version<T: AsRef<str>>(&mut self, version: T) -> Result<&mut Self, Error> {
+        let req = &mut self.request;
+        req.version = version.into().into();
+        Ok(self)
+    }
+
+    fn timeout(&mut self, timeout: Duration) -> Result<&mut Self, Error> {
+        self.request.timeout = timeout;
+        Ok(self)
+    }
+
+    fn build(&mut self) -> Result<Request, Error> {
+        Ok(Request::from(
+            self.request.method.clone(),
+            self.request.url.clone(),
+            self.request.headers.clone(),
+            self.request.body.clone(),
+            self.request.timeout,
+            self.request.version.clone(),
+        ))
     }
 }
 
