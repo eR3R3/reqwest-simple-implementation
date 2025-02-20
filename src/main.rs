@@ -1,21 +1,31 @@
-use thiserror::Error;
-use url::Url;
+// use thiserror::Error;
+// use url::Url;
 
-#[derive(Error, Debug)]
-pub enum MyError {
-    #[error("I/O 错误: {0}")]
-    Io(#[from] std::io::Error),
+// #[derive(Error, Debug)]
+// pub enum MyError {
+//     #[error("I/O 错误: {0}")]
+//     Io(#[from] std::io::Error),
+//
+//     #[error("URL 解析错误: {0}")]
+//     UrlParse(#[from] url::ParseError),
+//
+//     #[error("自定义错误: {0}")]
+//     Custom(String),
+// }
 
-    #[error("URL 解析错误: {0}")]
-    UrlParse(#[from] url::ParseError),
-
-    #[error("自定义错误: {0}")]
-    Custom(String),
+struct MyStruct {
+    value: String,
 }
 
-fn main() -> Result<Url, MyError> {
-    let x = Url::parse("https://www.google.com")?;
-    Ok(x)
+impl MyStruct {
+    fn change_value(&mut self) {
+        self.value = self.value.to_uppercase();
+    }
+}
+
+fn main() {
+    let mut s = MyStruct { value: String::from("hello") };
+    s.change_value();
 }
 
 
